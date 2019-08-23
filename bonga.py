@@ -110,7 +110,7 @@ class MainWindow:
 
         self.master.title(self.model_name)
         self.session = subprocess.Popen(['python', 'session.py',
-                                         self.base_url, self.model_name, "chunks.m3u8", self.img_url],
+                                         self.base_url, self.model_name, "chunks.m3u8"],
                                         stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         self.master.configure(background='green')
@@ -232,7 +232,7 @@ class MainWindow:
 
     def fetch_image(self):
         try:
-            response = requests.get(self.img_url, headers=HEADERS)
+            response = requests.get(self.img_url, headers=HEADERS, proxies=PROXIES)
             img = Image.open(io.BytesIO(response.content))
             self.model_image = ImageTk.PhotoImage(img)
             self.master.after_idle(self.update_image)

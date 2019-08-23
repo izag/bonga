@@ -16,11 +16,7 @@ USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:68.0) Gecko/20100101 F
 REFERER = 'https://sex-cams-online.net/chat-popup/'
 
 # proxies = {"http": "http://148.217.94.54:3128"}
-proxies = None
-# proxy = ProxyHandler(proxies)
-# opener = build_opener(proxy)
-# opener.addheaders = [('User-agent', USER_AGENT),
-#                      ('Referer', REFERER)]
+PROXIES = None
 
 HEADERS = {
     'User-agent': USER_AGENT,
@@ -29,7 +25,6 @@ HEADERS = {
 
 MAX_FAILS = 6
 PAD = 5
-DELAY = 2000
 OUTPUT = "C:/tmp/"
 
 logger = logging.getLogger('bonga_application')
@@ -50,17 +45,15 @@ class Chunks:
 class RecordSession(Thread):
     MIN_CHUNKS = 6
 
-    def __init__(self, master, url_base, model, chunk_url, dir_output):
+    def __init__(self, url_base, model, chunk_url, dir_output):
         super(RecordSession, self).__init__()
 
-        self.master = master
         self.base_url = url_base
         self.model_name = model
         self.output_dir = dir_output
         self.chunks_url = urljoin(self.base_url, chunk_url)
         self.name = 'RecordSession'
         self.stopped = False
-        self.daemon = True
 
     def get_model_name(self):
         return self.model_name
@@ -68,7 +61,7 @@ class RecordSession(Thread):
     def get_chunks(self):
         logger.debug(self.chunks_url)
         try:
-            r = requests.get(self.chunks_url, headers=HEADERS)
+            r = requests.get(self.chunks_url, headers=HEADERS, proxies=PROXIES)
             lines = r.text.splitlines()
 
             if len(lines) < RecordSession.MIN_CHUNKS:
@@ -102,8 +95,6 @@ class RecordSession(Thread):
                 fails += 1
 
                 if fails > MAX_FAILS:
-                    self.master.quit()
-                    self.master.update_idletasks()
                     return
 
                 time.sleep(1)
@@ -130,40 +121,10 @@ class RecordSession(Thread):
         self.stopped = True
 
 
-class ImageWindow:
-
-    def __init__(self, master, img_url):
-        self.master = master
-        self.img_url = img_url
-        self.name = "ImageWindow"
-        self.model_image = None
-
-        self.image_label = Label(master)
-        self.image_label.pack()
-
-        self.load_image()
-
-    def load_image(self):
-        try:
-            r = requests.get(self.img_url, headers=HEADERS)
-            img = Image.open(io.BytesIO(r.content))
-            self.model_image = ImageTk.PhotoImage(img)
-            self.image_label.config(image=self.model_image)
-        except BaseException as e:
-            logger.exception(e)
-            self.master.quit()
-            self.master.update_idletasks()
-            return
-
-        self.master.update_idletasks()
-        self.master.after(DELAY, self.load_image)
-
-
 class Control(Thread):
 
-    def __init__(self, master, session):
+    def __init__(self, session):
         super(Control, self).__init__()
-        self.master = master
         self.session = session
         self.daemon = True
 
@@ -179,19 +140,16 @@ class Control(Thread):
 
             print('bye')
             self.session.stop()
-            self.master.quit()
-            self.master.update_idletasks()
             return
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 5:
+    if len(sys.argv) < 4:
         sys.exit(1)
 
     base_url = sys.argv[1]
     model_name = sys.argv[2]
     chunks_url = sys.argv[3]
-    image_url = sys.argv[4]
 
     output_dir = OUTPUT + model_name + '_' + str(int(time.time()))
     os.mkdir(output_dir)
@@ -202,15 +160,11 @@ if __name__ == "__main__":
     logger.addHandler(fh)
     logger.info("Started!")
 
-    root = Tk()
-    root.resizable(False, False)
-    root.title(model_name + ' - Recording')
-    record_session = RecordSession(root, base_url, model_name, chunks_url, output_dir)
+    record_session = RecordSession(base_url, model_name, chunks_url, output_dir)
     record_session.start()
-    control = Control(root, record_session)
+    control = Control(record_session)
     control.start()
-    my_gui = ImageWindow(root, image_url)
-    root.mainloop()
+
+    record_session.join()
     logger.info("Exited!")
     print('bye')
-    sys.exit(0)
