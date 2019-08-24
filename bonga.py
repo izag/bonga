@@ -59,7 +59,8 @@ class MainWindow:
         level += 1
         self.input_text = StringVar()
         self.entry = Entry(root, textvariable=self.input_text, width=80)
-        self.entry.bind("<FocusIn>", self.entry_callback)
+        self.entry.bind("<FocusIn>", self.focus_callback)
+        self.entry.bind('<Return>', self.enter_callback)
         self.entry.focus_set()
         self.entry.grid(row=level, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
 
@@ -185,8 +186,11 @@ class MainWindow:
         self.input_text.set(model)
         self.update_model_info()
 
-    def entry_callback(self, event):
+    def focus_callback(self, event):
         self.entry.selection_range(0, END)
+
+    def enter_callback(self, event):
+        self.update_model_info()
 
     def get_image_url(self):
         edge_pos = self.base_url.find('-edge')
