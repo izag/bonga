@@ -1,4 +1,3 @@
-import io
 import logging
 import os
 import subprocess
@@ -6,9 +5,8 @@ import sys
 import time
 from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Thread
-from tkinter import Tk, Image, Label
+
 import requests
-from PIL import Image, ImageTk
 from requests import RequestException
 from requests.compat import urljoin
 
