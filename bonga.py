@@ -92,7 +92,6 @@ class MainWindow:
         self.load_image()
 
     def on_btn_start(self):
-        self.btn_stop.config(state=NORMAL)
         self.btn_start.config(state=DISABLED)
 
         self.stop()
@@ -113,10 +112,11 @@ class MainWindow:
 
         self.cb_resolutions.current(idx)
 
-        root.title(self.model_name)
+        self.update_title()
         self.session = RecordSession(self, self.base_url, self.model_name, "chunks.m3u8")
         self.session.start()
 
+        self.btn_stop.config(state=NORMAL)
         root.configure(background='green')
 
     def on_btn_stop(self):
@@ -208,10 +208,16 @@ class MainWindow:
         headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
         headers['X-Requested-With'] = 'XMLHttpRequest'
 
-        response = requests.post("https://sex-cams-online.net/tools/amf.php",
-                                 data=post_fields,
-                                 headers=headers,
-                                 proxies=PROXIES)
+        try:
+            response = requests.post("https://sex-cams-online.net/tools/amf.php",
+                                     data=post_fields,
+                                     headers=headers,
+                                     proxies=PROXIES)
+        except RequestException as error:
+            print("GetRoomData exception model: " + self.model_name)
+            print(error)
+            traceback.print_exc()
+            return None
 
         return response.json()
 
@@ -291,9 +297,6 @@ class RecordSession(Thread):
         self.fh.setLevel(logging.DEBUG)
         self.fh.setFormatter(formatter)
         self.logger.addHandler(self.fh)
-
-    def get_model_name(self):
-        return self.model_name
 
     def get_chunks(self):
         self.logger.debug(self.chunks_url)
