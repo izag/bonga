@@ -33,6 +33,8 @@ OUTPUT = "C:/tmp/"
 executor = ThreadPoolExecutor(max_workers=20)
 
 root = Tk()
+# 95.168.185.183:8080
+# https://sex-videochat.net/model/Cool-Baby/
 
 
 class MainWindow:
@@ -41,9 +43,11 @@ class MainWindow:
         menu_bar = Menu(root)
         self.history = Menu(menu_bar, tearoff=0)
         menu_bar.add_cascade(label="History", menu=self.history)
+        menu_bar.add_command(label="Toggle image", command=self.toggle_image)
         root.config(menu=menu_bar)
 
         self.session = None
+        self.show_image = True
 
         self.model_name = None
         self.update_title()
@@ -55,7 +59,7 @@ class MainWindow:
 
         self.level += 1
         self.input_text = StringVar()
-        self.entry_model = Entry(root, textvariable=self.input_text, width=80)
+        self.entry_model = Entry(root, textvariable=self.input_text, width=60)
         self.entry_model.bind("<FocusIn>", self.focus_callback)
         self.entry_model.bind('<Return>', self.enter_callback)
         self.entry_model.focus_set()
@@ -83,7 +87,7 @@ class MainWindow:
         self.chk_use_proxy = Checkbutton(text='Use proxy', variable=self.use_proxy)
         self.chk_use_proxy.grid(row=self.level, column=1, sticky=W, padx=PAD, pady=PAD)
 
-        self.entry_proxy = Entry(root, width=40, state=DISABLED)
+        self.entry_proxy = Entry(root, width=30, state=DISABLED)
         self.entry_proxy.grid(row=self.level, column=2, sticky=W + E, padx=PAD, pady=PAD)
 
         self.level += 1
@@ -254,7 +258,7 @@ class MainWindow:
         return response.json()
 
     def load_image(self):
-        if self.img_url is not None:
+        if (self.img_url is not None) or self.show_image:
             executor.submit(self.fetch_image)
 
         root.update_idletasks()
@@ -262,9 +266,12 @@ class MainWindow:
 
     def fetch_image(self):
         try:
-            response = requests.get(self.img_url, headers=HEADERS, proxies=proxies)
+            response = requests.get(self.img_url, headers=HEADERS)
             img = Image.open(io.BytesIO(response.content))
-            root.after_idle(self.update_image, img)
+            w, h = img.size
+            k = 450 / w
+            img_resized = img.resize((450, int(h * k)))
+            root.after_idle(self.update_image, img_resized)
         except BaseException as error:
             root.after_idle(self.set_undefined_state)
             print("Exception URL: " + self.img_url)
@@ -328,6 +335,17 @@ class MainWindow:
         else:
             self.entry_proxy.config(state=DISABLED)
 
+    def toggle_image(self):
+        if self.show_image:
+            self.model_image = None
+            self.image_label.config(image=None)
+            self.img_url = None
+            self.image_label.grid_forget()
+            self.show_image = False
+        else:
+            self.show_image = True
+            self.image_label.grid(row=0, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
+            self.update_model_info()
 
 class Chunks:
     IDX_CUR_POS = 3
@@ -366,7 +384,7 @@ class RecordSession(Thread):
     def get_chunks(self):
         self.logger.debug(self.chunks_url)
         try:
-            r = requests.get(self.chunks_url, headers=HEADERS, proxies=proxies)
+            r = requests.get(self.chunks_url, headers=HEADERS)
             lines = r.text.splitlines()
 
             if len(lines) < RecordSession.MIN_CHUNKS:
@@ -379,15 +397,22 @@ class RecordSession(Thread):
 
     def save_to_file(self, filename):
         self.logger.debug(filename)
-        fpath = os.path.join(self.output_dir, filename)
-        if os.path.exists(fpath):
+        file_path = os.path.join(self.output_dir, filename)
+        if os.path.exists(file_path):
             self.logger.debug("Skipped: " + filename)
             return
 
         ts_url = urljoin(self.base_url, filename)
-        subprocess.run(["c:\\progs\\wget\\wget.exe", "-q", "--no-check-certificate",
-                        "-O", fpath,
-                        ts_url])
+        # subprocess.run(["c:\\progs\\wget\\wget.exe", "-q", "--no-check-certificate",
+        #                 "-O", fpath,
+        #                 ts_url])
+
+        try:
+            with requests.get(ts_url, stream=True) as r, open(file_path, 'wb') as fd:
+                for chunk in r.iter_content(chunk_size=65536):
+                    fd.write(chunk)
+        except BaseException as error:
+            self.logger.exception(error)
 
     def run(self):
         self.logger.info("Started!")
