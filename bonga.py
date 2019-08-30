@@ -29,6 +29,7 @@ DELAY = 2000
 PAD = 5
 MAX_FAILS = 6
 OUTPUT = "C:/tmp/"
+LOGS = "./logs/"
 
 executor = ThreadPoolExecutor(max_workers=20)
 
@@ -46,10 +47,12 @@ class MainWindow:
         self.history = Menu(self.menu_bar, tearoff=0)
         self.menu_bar.add_cascade(label="History", menu=self.history)
         self.menu_bar.add_command(label="Toggle image", command=self.toggle_image)
+        self.hist_dict = {}
+        self.load_hist_dict()
         root.config(menu=self.menu_bar)
 
         self.session = None
-        self.show_image = True
+        self.show_image = False
 
         self.model_name = None
         self.update_title()
@@ -57,7 +60,7 @@ class MainWindow:
         self.level = 0
 
         self.image_label = Label(root)
-        self.image_label.grid(row=self.level, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
+        # self.image_label.grid(row=self.level, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
 
         self.level += 1
         self.input_text = StringVar()
@@ -105,12 +108,20 @@ class MainWindow:
         self.level += 1
         self.progress = ttk.Progressbar(root, orient=HORIZONTAL, length=120, mode='indeterminate')
 
+        root.bind("<FocusIn>", self.focus_callback)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.play_list_url = None
         self.base_url = None
         self.model_image = None
         self.img_url = None
+
+        self.logger = logging.getLogger('history')
+        self.logger.setLevel(logging.INFO)
+
+        self.fh = logging.FileHandler(os.path.join(LOGS, f'hist_{int(time.time())}.log'))
+        self.fh.setLevel(logging.INFO)
+        self.logger.addHandler(self.fh)
 
         self.load_image()
 
@@ -166,11 +177,12 @@ class MainWindow:
         global proxies
 
         self.set_undefined_state()
-        self.menu_bar.entryconfig("History", state=DISABLED)
+        self.menu_state(DISABLED)
 
         input_url = self.input_text.get().strip()
 
         if len(input_url) == 0:
+            self.set_undefined_state()
             return False
 
         if self.use_proxy.get():
@@ -208,20 +220,21 @@ class MainWindow:
             self.base_url = f"https:{server_url}/hls/stream_{self.model_name}/public/stream_{self.model_name}/"
 
         self.get_image_url()
-        self.add_to_history()
+        self.add_to_history(self.model_name)
         self.update_title()
+        self.logger.info(self.model_name)
 
-        self.menu_bar.entryconfig("History", state=NORMAL)
+        self.menu_state(NORMAL)
 
         return True
 
-    def add_to_history(self):
+    def add_to_history(self, name):
         try:
-            self.history.index(self.model_name)
+            self.history.index(name)
         except TclError:
-            arg = f'{self.model_name}'
+            arg = f'{name}'
             self.history.insert_command(0,
-                                        label=self.model_name,
+                                        label=name,
                                         command=lambda: self.load_from_history(arg))
 
     def load_from_history(self, model):
@@ -265,6 +278,9 @@ class MainWindow:
         return response.json()
 
     def load_image(self):
+        global executor
+        global root
+
         if (self.img_url is not None) or self.show_image:
             executor.submit(self.fetch_image)
 
@@ -272,6 +288,8 @@ class MainWindow:
         root.after(DELAY, self.load_image)
 
     def fetch_image(self):
+        global root
+
         try:
             response = requests.get(self.img_url, headers=HEADERS, timeout=2)
             img = Image.open(io.BytesIO(response.content))
@@ -290,12 +308,17 @@ class MainWindow:
         self.image_label.config(image=self.model_image)
 
     def on_close(self):
+        global root
+
         self.stop()
         root.update_idletasks()
         root.destroy()
+        self.fh.close()
+        self.logger.removeHandler(self.fh)
 
     def set_default_state(self):
-        self.menu_bar.entryconfig("History", state=NORMAL)
+        global root
+
         self.session = None
         self.btn_stop.config(state=DISABLED)
         self.btn_start.config(state=NORMAL)
@@ -306,6 +329,8 @@ class MainWindow:
         root.configure(background='SystemButtonFace')
 
     def update_title(self):
+        global root
+
         root.title(self.model_name or '<Undefined>')
 
         if self.session is None:
@@ -320,6 +345,7 @@ class MainWindow:
         root.title(root.title() + " - Recording")
 
     def set_undefined_state(self):
+        self.menu_state(NORMAL)
         self.model_image = None
         self.image_label.config(image=None)
         self.model_name = None
@@ -354,6 +380,23 @@ class MainWindow:
             self.show_image = True
             self.image_label.grid(row=0, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
             self.update_model_info()
+
+    def load_hist_dict(self):
+        for file in os.listdir(LOGS):
+            with open(os.path.join(LOGS, file)) as f:
+                for line in f.readlines():
+                    name = line.strip()
+                    count = self.hist_dict.get(name, 0)
+                    self.hist_dict[name] = count + 1
+
+        hist = sorted(self.hist_dict.items(), key=lambda x: x[1], reverse=True)
+        for item in reversed(hist[:10]):
+            self.add_to_history(item[0])
+
+    def menu_state(self, state):
+        # self.menu_bar.entryconfig("History", state=state)
+        # self.menu_bar.entryconfig("Toggle image", state=state)
+        pass
 
 
 class Chunks:
@@ -424,6 +467,9 @@ class RecordSession(Thread):
             self.logger.exception(error)
 
     def run(self):
+        global executor
+        global root
+
         self.logger.info("Started!")
         fails = 0
         last_pos = 0
@@ -471,6 +517,9 @@ class RecordSession(Thread):
 
 
 if __name__ == "__main__":
+    if not os.path.exists(LOGS):
+        os.mkdir(LOGS)
+
     root.resizable(False, False)
     my_gui = MainWindow()
     root.mainloop()
