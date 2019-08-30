@@ -33,6 +33,8 @@ OUTPUT = "C:/tmp/"
 executor = ThreadPoolExecutor(max_workers=20)
 
 root = Tk()
+
+
 # 95.168.185.183:8080
 # https://sex-videochat.net/model/Cool-Baby/
 
@@ -40,11 +42,11 @@ root = Tk()
 class MainWindow:
 
     def __init__(self):
-        menu_bar = Menu(root)
-        self.history = Menu(menu_bar, tearoff=0)
-        menu_bar.add_cascade(label="History", menu=self.history)
-        menu_bar.add_command(label="Toggle image", command=self.toggle_image)
-        root.config(menu=menu_bar)
+        self.menu_bar = Menu(root)
+        self.history = Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="History", menu=self.history)
+        self.menu_bar.add_command(label="Toggle image", command=self.toggle_image)
+        root.config(menu=self.menu_bar)
 
         self.session = None
         self.show_image = True
@@ -164,6 +166,8 @@ class MainWindow:
         global proxies
 
         self.set_undefined_state()
+        self.menu_bar.entryconfig("History", state=DISABLED)
+
         input_url = self.input_text.get().strip()
 
         if len(input_url) == 0:
@@ -207,6 +211,8 @@ class MainWindow:
         self.add_to_history()
         self.update_title()
 
+        self.menu_bar.entryconfig("History", state=NORMAL)
+
         return True
 
     def add_to_history(self):
@@ -248,7 +254,8 @@ class MainWindow:
             response = requests.post("https://sex-cams-online.net/tools/amf.php",
                                      data=post_fields,
                                      headers=headers,
-                                     proxies=proxies)
+                                     proxies=proxies,
+                                     timeout=5)
         except RequestException as error:
             print("GetRoomData exception model: " + self.model_name)
             print(error)
@@ -266,7 +273,7 @@ class MainWindow:
 
     def fetch_image(self):
         try:
-            response = requests.get(self.img_url, headers=HEADERS)
+            response = requests.get(self.img_url, headers=HEADERS, timeout=2)
             img = Image.open(io.BytesIO(response.content))
             w, h = img.size
             k = 450 / w
@@ -288,6 +295,7 @@ class MainWindow:
         root.destroy()
 
     def set_default_state(self):
+        self.menu_bar.entryconfig("History", state=NORMAL)
         self.session = None
         self.btn_stop.config(state=DISABLED)
         self.btn_start.config(state=NORMAL)
@@ -347,6 +355,7 @@ class MainWindow:
             self.image_label.grid(row=0, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
             self.update_model_info()
 
+
 class Chunks:
     IDX_CUR_POS = 3
 
@@ -384,7 +393,7 @@ class RecordSession(Thread):
     def get_chunks(self):
         self.logger.debug(self.chunks_url)
         try:
-            r = requests.get(self.chunks_url, headers=HEADERS)
+            r = requests.get(self.chunks_url, headers=HEADERS, timeout=2)
             lines = r.text.splitlines()
 
             if len(lines) < RecordSession.MIN_CHUNKS:
@@ -408,7 +417,7 @@ class RecordSession(Thread):
         #                 ts_url])
 
         try:
-            with requests.get(ts_url, stream=True) as r, open(file_path, 'wb') as fd:
+            with requests.get(ts_url, stream=True, timeout=10) as r, open(file_path, 'wb') as fd:
                 for chunk in r.iter_content(chunk_size=65536):
                     fd.write(chunk)
         except BaseException as error:
