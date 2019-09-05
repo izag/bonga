@@ -236,6 +236,8 @@ class MainWindow:
                 return False
 
             server_url = info['localData']['videoServerUrl']
+            self.model_name = info['performerData']['username']
+            self.cb_resolutions.set(info['performerData']['videoQuality'])
             self.base_url = f"https:{server_url}/hls/stream_{self.model_name}/public/stream_{self.model_name}/"
 
         if self.use_proxy.get() and len(proxy) != 0:
@@ -461,6 +463,7 @@ class HistoryWindow:
     def __init__(self, parent, win):
         self.window = win
         self.parent_window = parent
+        self.window.title("Full history")
 
         frm_top = Frame(win)
         frm_bottom = Frame(win)
