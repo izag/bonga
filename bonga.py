@@ -1,14 +1,13 @@
 import io
 import logging
 import os
-import subprocess
 import time
 import traceback
-from _tkinter import TclError
 from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Thread
-from tkinter import Tk, Button, Entry, StringVar, ttk, W, E, Image, Label, Menu, DISABLED, NORMAL, END, HORIZONTAL, \
-    Checkbutton, BooleanVar
+from tkinter import Tk, Button, ttk, W, E, Image, Label, Menu, DISABLED, NORMAL, END, HORIZONTAL, \
+    Checkbutton, BooleanVar, BOTH, Toplevel, Frame, Listbox, LEFT, Scrollbar, RIGHT, SINGLE, VERTICAL, Y, StringVar, \
+    Entry, TOP
 
 import requests
 from PIL import Image, ImageTk
@@ -43,12 +42,12 @@ root = Tk()
 class MainWindow:
 
     def __init__(self):
+        global root
+
         self.menu_bar = Menu(root)
-        self.history = Menu(self.menu_bar, tearoff=0)
-        self.menu_bar.add_cascade(label="History", menu=self.history)
+        self.menu_bar.add_command(label="Back", command=self.back_in_history)
+        self.menu_bar.add_command(label="History", command=self.show_full_history)
         self.menu_bar.add_command(label="Toggle image", command=self.toggle_image)
-        self.hist_dict = {}
-        self.load_hist_dict()
         root.config(menu=self.menu_bar)
 
         self.session = None
@@ -60,18 +59,17 @@ class MainWindow:
         self.level = 0
 
         self.image_label = Label(root)
-        # self.image_label.grid(row=self.level, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
 
         self.level += 1
-        self.input_text = StringVar()
-        self.entry_model = Entry(root, textvariable=self.input_text, width=60)
-        self.entry_model.bind("<FocusIn>", self.focus_callback)
-        self.entry_model.bind('<Return>', self.enter_callback)
-        self.entry_model.focus_set()
-        self.entry_model.grid(row=self.level, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
+        self.cb_model = ttk.Combobox(root, width=60)
+        self.cb_model.bind("<FocusIn>", self.focus_callback)
+        self.cb_model.bind("<Button-1>", self.drop_down_callback)
+        self.cb_model.bind('<Return>', self.enter_callback)
+        self.cb_model.focus_set()
+        self.cb_model.grid(row=self.level, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
 
         self.level += 1
-        self.btn_update = Button(root, text="Update info", command=self.update_model_info)
+        self.btn_update = Button(root, text="Update info", command=lambda: self.update_model_info(True))
         self.btn_update.grid(row=self.level, column=0, sticky=W + E, padx=PAD, pady=PAD)
 
         self.cb_resolutions = ttk.Combobox(root, state="readonly", values=[])
@@ -92,8 +90,8 @@ class MainWindow:
         self.chk_use_proxy = Checkbutton(text='Use proxy', variable=self.use_proxy)
         self.chk_use_proxy.grid(row=self.level, column=1, sticky=W, padx=PAD, pady=PAD)
 
-        self.entry_proxy = Entry(root, width=30, state=DISABLED)
-        self.entry_proxy.grid(row=self.level, column=2, sticky=W + E, padx=PAD, pady=PAD)
+        self.cb_proxy = ttk.Combobox(root, width=30, state=DISABLED)
+        self.cb_proxy.grid(row=self.level, column=2, sticky=W + E, padx=PAD, pady=PAD)
 
         self.level += 1
         self.btn_start = Button(root, text="Start", command=self.on_btn_start)
@@ -116,12 +114,27 @@ class MainWindow:
         self.model_image = None
         self.img_url = None
 
-        self.logger = logging.getLogger('history')
-        self.logger.setLevel(logging.INFO)
+        self.hist_logger = logging.getLogger('history')
+        self.hist_logger.setLevel(logging.INFO)
 
-        self.fh = logging.FileHandler(os.path.join(LOGS, f'hist_{int(time.time())}.log'))
-        self.fh.setLevel(logging.INFO)
-        self.logger.addHandler(self.fh)
+        self.fh_hist = logging.FileHandler(os.path.join(LOGS, f'hist_{int(time.time())}.log'))
+        self.fh_hist.setLevel(logging.INFO)
+        self.hist_logger.addHandler(self.fh_hist)
+
+        self.proxy_logger = logging.getLogger('proxy')
+        self.proxy_logger.setLevel(logging.INFO)
+
+        self.fh_proxy = logging.FileHandler(os.path.join(LOGS, f'proxy_{int(time.time())}.log'))
+        self.fh_proxy.setLevel(logging.INFO)
+        self.proxy_logger.addHandler(self.fh_proxy)
+
+        self.hist_dict = {}
+        self.load_hist_dict()
+
+        self.proxy_dict = {}
+        self.load_proxy_dict()
+
+        self.hist_stack = []
 
         self.load_image()
 
@@ -130,12 +143,12 @@ class MainWindow:
 
         self.stop()
 
-        success = self.update_model_info()
+        idx = self.cb_resolutions.current()
+
+        success = self.update_model_info(True)
         if not success:
             self.set_default_state()
             return
-
-        idx = self.cb_resolutions.current()
 
         items_count = len(self.cb_resolutions['value'])
         if items_count == 0:
@@ -155,6 +168,7 @@ class MainWindow:
         self.progress.start()
 
         self.update_title()
+
         root.configure(background='green')
 
     def on_btn_stop(self):
@@ -169,24 +183,29 @@ class MainWindow:
         self.session = None
 
     def copy_model_name(self):
+        global root
+
         root.clipboard_clear()
         root.clipboard_append(root.title())
         root.update()
 
-    def update_model_info(self):
+    def update_model_info(self, remember):
         global proxies
 
-        self.set_undefined_state()
-        self.menu_state(DISABLED)
+        if remember and (self.model_name is not None):
+            if len(self.hist_stack) == 0 or (self.model_name != self.hist_stack[-1]):
+                self.hist_stack.append(self.model_name)
 
-        input_url = self.input_text.get().strip()
+        self.set_undefined_state()
+
+        input_url = self.cb_model.get().strip()
 
         if len(input_url) == 0:
             self.set_undefined_state()
             return False
 
-        if self.use_proxy.get():
-            proxy = self.entry_proxy.get()
+        proxy = self.cb_proxy.get().strip()
+        if self.use_proxy.get() and len(proxy.strip()) != 0:
             proxies = {
                 "http": "http://" + proxy,
                 "https": "https://" + proxy
@@ -219,33 +238,45 @@ class MainWindow:
             server_url = info['localData']['videoServerUrl']
             self.base_url = f"https:{server_url}/hls/stream_{self.model_name}/public/stream_{self.model_name}/"
 
+        if self.use_proxy.get() and len(proxy) != 0:
+            self.add_to_proxies(proxy)
+
         self.get_image_url()
         self.add_to_history(self.model_name)
-        self.update_title()
-        self.logger.info(self.model_name)
 
-        self.menu_state(NORMAL)
+        self.update_title()
 
         return True
 
     def add_to_history(self, name):
-        try:
-            self.history.index(name)
-        except TclError:
-            arg = f'{name}'
-            self.history.insert_command(0,
-                                        label=name,
-                                        command=lambda: self.load_from_history(arg))
+        if len(self.cb_model['values']) == 0:
+            self.cb_model['values'] = name
+        elif name not in self.cb_model['values']:
+            self.cb_model['values'] = (name, *self.cb_model['values'])
 
-    def load_from_history(self, model):
-        self.input_text.set(model)
-        self.update_model_info()
+        self.hist_logger.info(name)
+        count = self.hist_dict.get(name, 0)
+        self.hist_dict[name] = count + 1
+
+    def add_to_proxies(self, proxy):
+        if len(self.cb_proxy['values']) == 0:
+            self.cb_proxy['values'] = proxy
+        elif proxy not in self.cb_proxy['values']:
+            self.cb_proxy['values'] = (proxy, *self.cb_proxy['values'])
+
+        self.proxy_logger.info(proxy)
+        count = self.proxy_dict.get(proxy, 0)
+        self.proxy_dict[proxy] = count + 1
 
     def focus_callback(self, event):
-        self.entry_model.selection_range(0, END)
+        self.cb_model.selection_range(0, END)
+
+    def drop_down_callback(self, event):
+        self.cb_model.selection_range(0, END)
+        self.cb_model.event_generate('<Down>')
 
     def enter_callback(self, event):
-        self.update_model_info()
+        self.update_model_info(True)
 
     def get_image_url(self):
         edge_pos = self.base_url.find('-edge')
@@ -313,8 +344,10 @@ class MainWindow:
         self.stop()
         root.update_idletasks()
         root.destroy()
-        self.fh.close()
-        self.logger.removeHandler(self.fh)
+        self.fh_hist.close()
+        self.hist_logger.removeHandler(self.fh_hist)
+        self.fh_proxy.close()
+        self.proxy_logger.removeHandler(self.fh_proxy)
 
     def set_default_state(self):
         global root
@@ -345,7 +378,6 @@ class MainWindow:
         root.title(root.title() + " - Recording")
 
     def set_undefined_state(self):
-        self.menu_state(NORMAL)
         self.model_image = None
         self.image_label.config(image=None)
         self.model_name = None
@@ -356,18 +388,17 @@ class MainWindow:
         if self.session is None:
             return
 
-        self.input_text.set(self.session.model_name)
-        self.entry_model.selection_range(0, END)
-        self.update_model_info()
+        self.cb_model.set(self.session.model_name)
+        self.cb_model.selection_range(0, END)
+        self.update_model_info(True)
 
     def on_use_proxy_change(self, *args):
         if self.use_proxy.get():
-            self.entry_proxy.config(state=NORMAL)
-            self.entry_proxy.focus_set()
-            self.entry_proxy.selection_range(0, END)
-            self.entry_proxy.selection_range(0, END)
+            self.cb_proxy.config(state=NORMAL)
+            self.cb_proxy.focus_set()
+            self.cb_proxy.selection_range(0, END)
         else:
-            self.entry_proxy.config(state=DISABLED)
+            self.cb_proxy.config(state=DISABLED)
 
     def toggle_image(self):
         if self.show_image:
@@ -379,24 +410,110 @@ class MainWindow:
         else:
             self.show_image = True
             self.image_label.grid(row=0, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
-            self.update_model_info()
+            self.update_model_info(True)
+
+    def show_full_history(self):
+        HistoryWindow(self, Toplevel(root))
+
+    def back_in_history(self):
+        if len(self.hist_stack) == 0:
+            return
+
+        self.cb_model.set(self.hist_stack.pop())
+        self.update_model_info(False)
 
     def load_hist_dict(self):
         for file in os.listdir(LOGS):
-            with open(os.path.join(LOGS, file)) as f:
+            if not file.startswith('hist_'):
+                continue
+
+            full_path = os.path.join(LOGS, file)
+            if os.path.getsize(full_path) == 0:
+                continue
+
+            with open(full_path) as f:
                 for line in f.readlines():
                     name = line.strip()
                     count = self.hist_dict.get(name, 0)
                     self.hist_dict[name] = count + 1
 
-        hist = sorted(self.hist_dict.items(), key=lambda x: x[1], reverse=True)
-        for item in reversed(hist[:10]):
-            self.add_to_history(item[0])
+    def load_proxy_dict(self):
+        for file in os.listdir(LOGS):
+            if not file.startswith('proxy_'):
+                continue
 
-    def menu_state(self, state):
-        # self.menu_bar.entryconfig("History", state=state)
-        # self.menu_bar.entryconfig("Toggle image", state=state)
-        pass
+            full_path = os.path.join(LOGS, file)
+            if os.path.getsize(full_path) == 0:
+                continue
+
+            with open(full_path) as f:
+                for line in f.readlines():
+                    name = line.strip()
+                    count = self.proxy_dict.get(name, 0)
+                    self.proxy_dict[name] = count + 1
+
+        hist = sorted(self.proxy_dict.items(), key=lambda x: x[1], reverse=True)
+        self.cb_proxy.configure(values=[x[0] for x in hist[:10]])
+
+
+class HistoryWindow:
+
+    def __init__(self, parent, win):
+        self.window = win
+        self.parent_window = parent
+
+        frm_top = Frame(win)
+        frm_bottom = Frame(win)
+
+        self.search = StringVar()
+        self.search.trace("w", lambda name, index, mode, sv=self.search: self.on_search(sv))
+        entry_search = Entry(frm_top, textvariable=self.search, width=62)
+        entry_search.pack(side=TOP, fill=BOTH, expand=1)
+
+        self.list_box = Listbox(frm_bottom, width=60, height=40, selectmode=SINGLE)
+        self.list_box.pack(side=LEFT, fill=BOTH, expand=1)
+        scroll = Scrollbar(frm_bottom, command=self.list_box.yview, orient=VERTICAL)
+        scroll.pack(side=RIGHT, fill=Y)
+        self.list_box.config(yscrollcommand=scroll.set)
+        self.list_box.bind('<<ListboxSelect>>', self.on_listbox_select)
+
+        frm_top.pack()
+        frm_bottom.pack()
+
+        self.fill_list_box()
+
+    def on_search(self, search):
+        query = search.get().strip().lower()
+        if len(query) < 2:
+            self.fill_list_box()
+            return
+
+        self.list_box.delete(0, END)
+        search_results = []
+        for key in self.parent_window.hist_dict:
+            pos = key.lower().find(query)
+            if pos == -1:
+                continue
+
+            search_results.append((key, pos))
+
+        search_results.sort(key=lambda x: x[1])
+        self.list_box.insert(END, *[x[0] for x in search_results])
+
+    def fill_list_box(self):
+        self.list_box.delete(0, END)
+        hist = sorted(self.parent_window.hist_dict.items(), key=lambda x: x[1], reverse=True)
+        self.list_box.insert(END, *[x[0] for x in hist])
+
+    def on_listbox_select(self, event):
+        w = event.widget
+        selected = w.curselection()
+        if len(selected) == 0:
+            return
+
+        index = selected[0]
+        value = w.get(index)
+        self.parent_window.cb_model.set(value)
 
 
 class Chunks:
@@ -455,10 +572,6 @@ class RecordSession(Thread):
             return
 
         ts_url = urljoin(self.base_url, filename)
-        # subprocess.run(["c:\\progs\\wget\\wget.exe", "-q", "--no-check-certificate",
-        #                 "-O", fpath,
-        #                 ts_url])
-
         try:
             with requests.get(ts_url, stream=True, timeout=10) as r, open(file_path, 'wb') as fd:
                 for chunk in r.iter_content(chunk_size=65536):
