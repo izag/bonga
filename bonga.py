@@ -7,7 +7,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Thread
 from tkinter import Tk, Button, ttk, W, E, Image, Label, Menu, DISABLED, NORMAL, END, HORIZONTAL, \
     Checkbutton, BooleanVar, BOTH, Toplevel, Frame, Listbox, LEFT, Scrollbar, RIGHT, SINGLE, VERTICAL, Y, StringVar, \
-    Entry, TOP
+    Entry
 
 import clipboard
 import requests
@@ -25,6 +25,7 @@ HEADERS = {
     'Referer': REFERER
 }
 
+TIMEOUT = (3.05, 9.05)
 DELAY = 2000
 PAD = 5
 MAX_FAILS = 6
@@ -45,6 +46,9 @@ class MainWindow:
     def __init__(self):
         global root
 
+        self.http_session = requests.Session()
+        self.http_session.headers.update(HEADERS)
+
         self.menu_bar = Menu(root)
         self.menu_bar.add_command(label="Back", command=self.back_in_history)
         self.menu_bar.add_command(label="History", command=self.show_full_history)
@@ -53,6 +57,7 @@ class MainWindow:
 
         self.session = None
         self.show_image = False
+        self.hist_window = None
 
         self.model_name = None
         self.update_title()
@@ -276,6 +281,8 @@ class MainWindow:
 
     def focus_callback(self, event):
         self.cb_model.selection_range(0, END)
+        if self.hist_window is not None:
+            self.hist_window.lift()
 
     def drop_down_callback(self, event):
         self.cb_model.focus_set()
@@ -297,16 +304,17 @@ class MainWindow:
             'args[]': [self.model_name, False]
         }
 
-        headers = HEADERS.copy()
-        headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8'
-        headers['X-Requested-With'] = 'XMLHttpRequest'
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
 
         try:
-            response = requests.post("https://sex-cams-online.net/tools/amf.php",
-                                     data=post_fields,
-                                     headers=headers,
-                                     proxies=proxies,
-                                     timeout=5)
+            response = self.http_session.post("https://sex-cams-online.net/tools/amf.php",
+                                              data=post_fields,
+                                              headers=headers,
+                                              proxies=proxies,
+                                              timeout=TIMEOUT)
         except RequestException as error:
             print("GetRoomData exception model: " + self.model_name)
             print(error)
@@ -329,7 +337,7 @@ class MainWindow:
         global root
 
         try:
-            response = requests.get(self.img_url, headers=HEADERS, timeout=2)
+            response = self.http_session.get(self.img_url, timeout=TIMEOUT)
             img = Image.open(io.BytesIO(response.content))
             w, h = img.size
             k = 450 / w
@@ -355,6 +363,7 @@ class MainWindow:
         self.hist_logger.removeHandler(self.fh_hist)
         self.fh_proxy.close()
         self.proxy_logger.removeHandler(self.fh_proxy)
+        self.http_session.close()
 
     def set_default_state(self):
         global root
@@ -420,7 +429,10 @@ class MainWindow:
             self.update_model_info(True)
 
     def show_full_history(self):
-        HistoryWindow(self, Toplevel(root))
+        if self.hist_window is not None:
+            self.hist_window.on_close()
+
+        self.hist_window = HistoryWindow(self, Toplevel(root))
 
     def back_in_history(self):
         if len(self.hist_stack) == 0:
@@ -475,8 +487,11 @@ class HistoryWindow:
 
         self.search = StringVar()
         self.search.trace("w", lambda name, index, mode, sv=self.search: self.on_search(sv))
-        entry_search = Entry(frm_top, textvariable=self.search, width=62)
-        entry_search.pack(side=TOP, fill=BOTH, expand=1)
+        self.entry_search = Entry(frm_top, textvariable=self.search, width=57)
+        self.entry_search.pack(side=LEFT, fill=BOTH, expand=1)
+
+        self.btn_clear = Button(frm_top, text="Clear", command=self.on_clear)
+        self.btn_clear.pack(side=RIGHT, fill=BOTH, expand=1)
 
         self.list_box = Listbox(frm_bottom, width=60, height=40, selectmode=SINGLE)
         self.list_box.pack(side=LEFT, fill=BOTH, expand=1)
@@ -488,7 +503,14 @@ class HistoryWindow:
         frm_top.pack()
         frm_bottom.pack()
 
+        self.window.bind("<FocusIn>", self.focus_callback)
+        self.window.protocol("WM_DELETE_WINDOW", self.on_close)
+
         self.fill_list_box()
+
+    def on_clear(self):
+        self.search.set("")
+        self.on_search(self.search)
 
     def on_search(self, search):
         query = search.get().strip().lower()
@@ -523,6 +545,39 @@ class HistoryWindow:
         value = w.get(index)
         self.parent_window.cb_model.set(value)
 
+    def lift(self):
+        self.window.lift()
+
+    def on_close(self):
+        self.parent_window.hist_window = None
+        self.window.update_idletasks()
+        self.window.destroy()
+
+    def focus_callback(self, event):
+        self.entry_search.selection_range(0, END)
+        root.lift()
+
+
+class SessionPool:
+
+    def __init__(self, count):
+        self.size = count
+        self.data = []
+        self.current = 0
+        for i in range(self.size):
+            s = requests.Session()
+            s.headers.update(HEADERS)
+            self.data.append(s)
+
+    def get(self):
+        s = self.data[self.current]
+        self.current += 1
+        self.current %= self.size
+        return s
+
+
+POOL = SessionPool(5)
+
 
 class Chunks:
     IDX_CUR_POS = 3
@@ -537,6 +592,9 @@ class RecordSession(Thread):
 
     def __init__(self, main_win, url_base, model, chunk_url):
         super(RecordSession, self).__init__()
+
+        self.http_session = requests.Session()
+        self.http_session.headers.update(HEADERS)
 
         self.main_win = main_win
         self.base_url = url_base
@@ -561,7 +619,7 @@ class RecordSession(Thread):
     def get_chunks(self):
         self.logger.debug(self.chunks_url)
         try:
-            r = requests.get(self.chunks_url, headers=HEADERS, timeout=2)
+            r = self.http_session.get(self.chunks_url, timeout=TIMEOUT)
             lines = r.text.splitlines()
 
             if len(lines) < RecordSession.MIN_CHUNKS:
@@ -581,7 +639,8 @@ class RecordSession(Thread):
 
         ts_url = urljoin(self.base_url, filename)
         try:
-            with requests.get(ts_url, stream=True, timeout=10) as r, open(file_path, 'wb') as fd:
+            session = POOL.get()
+            with session.get(ts_url, stream=True, timeout=TIMEOUT) as r, open(file_path, 'wb') as fd:
                 for chunk in r.iter_content(chunk_size=65536):
                     fd.write(chunk)
         except BaseException as error:
@@ -632,6 +691,7 @@ class RecordSession(Thread):
         self.logger.info("Exited!")
         self.fh.close()
         self.logger.removeHandler(self.fh)
+        self.http_session.close()
 
     def stop(self):
         self.stopped = True
