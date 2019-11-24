@@ -18,8 +18,6 @@ from requests.compat import urljoin
 USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:68.0) Gecko/20100101 Firefox/68.0'
 REFERER = 'https://sex-cams-online.net/chat-popup/'
 
-proxies = None
-
 HEADERS = {
     'User-agent': USER_AGENT,
     'Referer': REFERER
@@ -58,6 +56,7 @@ class MainWindow:
         self.session = None
         self.show_image = False
         self.hist_window = None
+        self.proxies = None
 
         self.model_name = None
         self.update_title()
@@ -96,7 +95,7 @@ class MainWindow:
         self.use_proxy.set(False)
         self.use_proxy.trace('w', self.on_use_proxy_change)
 
-        self.chk_use_proxy = Checkbutton(text='Use proxy', variable=self.use_proxy)
+        self.chk_use_proxy = Checkbutton(root, text='Use proxy', variable=self.use_proxy)
         self.chk_use_proxy.grid(row=self.level, column=1, sticky=W, padx=PAD, pady=PAD)
 
         self.cb_proxy = ttk.Combobox(root, width=30, state=DISABLED)
@@ -202,8 +201,6 @@ class MainWindow:
         self.cb_model.selection_range(0, END)
 
     def update_model_info(self, remember):
-        global proxies
-
         if remember and (self.model_name is not None):
             if len(self.hist_stack) == 0 or (self.model_name != self.hist_stack[-1]):
                 self.hist_stack.append(self.model_name)
@@ -218,12 +215,12 @@ class MainWindow:
 
         proxy = self.cb_proxy.get().strip()
         if self.use_proxy.get() and len(proxy.strip()) != 0:
-            proxies = {
+            self.proxies = {
                 "http": "http://" + proxy,
                 "https": "https://" + proxy
             }
         else:
-            proxies = None
+            self.proxies = None
 
         self.base_url = None
         if input_url.startswith('https://ded'):
@@ -327,7 +324,7 @@ class MainWindow:
             response = self.http_session.post("https://sex-cams-online.net/tools/amf.php",
                                               data=post_fields,
                                               headers=headers,
-                                              proxies=proxies,
+                                              proxies=self.proxies,
                                               timeout=TIMEOUT)
         except RequestException as error:
             print("GetRoomData exception model: " + self.model_name)
