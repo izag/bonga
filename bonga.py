@@ -30,13 +30,16 @@ MAX_FAILS = 6
 OUTPUT = "C:/tmp/"
 LOGS = "./logs/"
 
+ALL_TIME = 0
+DAY = 24 * 60 * 60
+TWO_DAYS = 2 * DAY
+WEEK = 7 * DAY
+MONTH = 30 * DAY
+THREE_MONTHS = 3 * MONTH
+
 executor = ThreadPoolExecutor(max_workers=20)
 
 root = Tk()
-
-
-# 95.168.185.183:8080
-# https://sex-videochat.net/model/Cool-Baby/
 
 
 class MainWindow:
@@ -49,8 +52,17 @@ class MainWindow:
 
         self.menu_bar = Menu(root)
         self.menu_bar.add_command(label="Back", command=self.back_in_history)
-        self.menu_bar.add_command(label="History", command=self.show_full_history)
         self.menu_bar.add_command(label="Toggle image", command=self.toggle_image)
+
+        hist_menu = Menu(self.menu_bar, tearoff=0)
+        hist_menu.add_command(label="All time", command=lambda: self.show_full_history(ALL_TIME))
+        hist_menu.add_command(label="Last day", command=lambda: self.show_full_history(DAY))
+        hist_menu.add_command(label="Two days", command=lambda: self.show_full_history(TWO_DAYS))
+        hist_menu.add_command(label="Week", command=lambda: self.show_full_history(WEEK))
+        hist_menu.add_command(label="Month", command=lambda: self.show_full_history(MONTH))
+        hist_menu.add_command(label="Three months", command=lambda: self.show_full_history(THREE_MONTHS))
+        self.menu_bar.add_cascade(label="History", menu=hist_menu)
+
         root.config(menu=self.menu_bar)
 
         self.session = None
@@ -138,9 +150,6 @@ class MainWindow:
         self.fh_proxy = logging.FileHandler(os.path.join(LOGS, f'proxy_{int(time.time())}.log'))
         self.fh_proxy.setLevel(logging.INFO)
         self.proxy_logger.addHandler(self.fh_proxy)
-
-        self.hist_dict = {}
-        self.load_hist_dict()
 
         self.proxy_dict = {}
         self.load_proxy_dict()
@@ -264,8 +273,6 @@ class MainWindow:
             self.cb_model['values'] = (name, *self.cb_model['values'])
 
         self.hist_logger.info(name)
-        count = self.hist_dict.get(name, 0)
-        self.hist_dict[name] = count + 1
 
     def remove_from_favorites(self):
         name = self.cb_model.get().strip()
@@ -439,11 +446,11 @@ class MainWindow:
             self.image_label.grid(row=0, column=0, columnspan=5, sticky=W + E, padx=PAD, pady=PAD)
             self.update_model_info(True)
 
-    def show_full_history(self):
+    def show_full_history(self, period):
         if self.hist_window is not None:
             self.hist_window.on_close()
 
-        self.hist_window = HistoryWindow(self, Toplevel(root))
+        self.hist_window = HistoryWindow(self, Toplevel(root), load_hist_dict(period))
 
     def back_in_history(self):
         if len(self.hist_stack) == 0:
@@ -451,21 +458,6 @@ class MainWindow:
 
         self.cb_model.set(self.hist_stack.pop())
         self.update_model_info(False)
-
-    def load_hist_dict(self):
-        for file in os.listdir(LOGS):
-            if not file.startswith('hist_'):
-                continue
-
-            full_path = os.path.join(LOGS, file)
-            if os.path.getsize(full_path) == 0:
-                continue
-
-            with open(full_path) as f:
-                for line in f.readlines():
-                    name = line.strip()
-                    count = self.hist_dict.get(name, 0)
-                    self.hist_dict[name] = count + 1
 
     def load_proxy_dict(self):
         for file in os.listdir(LOGS):
@@ -486,11 +478,39 @@ class MainWindow:
         self.cb_proxy.configure(values=[x[0] for x in hist[:10]])
 
 
+def load_hist_dict(period):
+    now = time.time()
+
+    res = {}
+    for file in os.listdir(LOGS):
+        if not file.startswith('hist_'):
+            continue
+
+        full_path = os.path.join(LOGS, file)
+        if os.path.getsize(full_path) == 0:
+            continue
+
+        mtime = os.path.getmtime(full_path)
+        diff = now - mtime
+
+        if (period != ALL_TIME) and (diff > period):
+            continue
+
+        with open(full_path) as f:
+            for line in f.readlines():
+                name = line.strip()
+                count = res.get(name, 0)
+                res[name] = count + 1
+
+    return res
+
+
 class HistoryWindow:
 
-    def __init__(self, parent, win):
+    def __init__(self, parent, win, hist_dict):
         self.window = win
         self.parent_window = parent
+        self.hist_dict = hist_dict
         self.window.title("Full history")
         self.window.resizable(False, False)
 
@@ -532,7 +552,7 @@ class HistoryWindow:
 
         self.list_box.delete(0, END)
         search_results = []
-        for key in self.parent_window.hist_dict:
+        for key in self.hist_dict:
             pos = key.lower().find(query)
             if pos == -1:
                 continue
@@ -544,7 +564,7 @@ class HistoryWindow:
 
     def fill_list_box(self):
         self.list_box.delete(0, END)
-        hist = sorted(self.parent_window.hist_dict.items(), key=lambda x: x[1], reverse=True)
+        hist = sorted(self.hist_dict.items(), key=lambda x: x[1], reverse=True)
         self.list_box.insert(END, *[x[0] for x in hist])
 
     def on_listbox_select(self, event):
