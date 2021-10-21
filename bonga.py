@@ -16,7 +16,7 @@ from requests import RequestException
 from requests.compat import urljoin
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:68.0) Gecko/20100101 Firefox/68.0'
-REFERER = 'https://sex-cams-online.net/chat-popup/'
+REFERER = 'https://bimbolive.com/'
 
 HEADERS = {
     'User-agent': USER_AGENT,
@@ -231,6 +231,8 @@ class MainWindow:
         else:
             self.proxies = None
 
+        ## https://live-edge66.bcvcdn.com/hls/stream_-icebabyice-/public/stream_-icebabyice-/chunks.m3u8
+        ## https://live-edge3.bcvcdn.com/hls/stream_TemariShi/public-aac/stream_TemariShi/chunks.m3u8
         self.base_url = None
         if input_url.startswith('https://ded'):
             public_pos = input_url.rfind('public')
@@ -256,7 +258,7 @@ class MainWindow:
             server_url = info['localData']['videoServerUrl']
             self.model_name = info['performerData']['username']
             self.cb_resolutions.set(info['performerData']['videoQuality'])
-            self.base_url = f"https:{server_url}/hls/stream_{self.model_name}/public/stream_{self.model_name}/"
+            self.base_url = f"https:{server_url}/hls/stream_{self.model_name}/public-aac/stream_{self.model_name}/"
 
         if self.use_proxy.get() and len(proxy) != 0:
             self.add_to_proxies(proxy)
@@ -314,7 +316,7 @@ class MainWindow:
         edge_pos = self.base_url.find('-edge')
         point_pos = self.base_url.find('.', edge_pos)
         vsid = self.base_url[edge_pos + 5: point_pos]
-        self.img_url = f"https://mobile-edge{vsid}.bcrncdn.com/stream_{self.model_name}.jpg"
+        self.img_url = f"https://mobile-edge{vsid}.bcvcdn.com/stream_{self.model_name}.jpg"
 
     def get_model_info(self):
         post_fields = {
@@ -328,7 +330,7 @@ class MainWindow:
         }
 
         try:
-            response = self.http_session.post("https://sex-cams-online.net/tools/amf.php",
+            response = self.http_session.post("https://rt.chat-s-devushkami.com/tools/amf.php",
                                               data=post_fields,
                                               headers=headers,
                                               proxies=self.proxies,
@@ -358,8 +360,8 @@ class MainWindow:
             response = self.http_session.get(self.img_url, timeout=TIMEOUT)
             img = Image.open(io.BytesIO(response.content))
             w, h = img.size
-            k = 450 / w
-            img_resized = img.resize((450, int(h * k)))
+            k = 200 / w
+            img_resized = img.resize((200, int(h * k)))
             root.after_idle(self.update_image, img_resized)
         except BaseException as error:
             root.after_idle(self.set_undefined_state)
