@@ -27,7 +27,7 @@ TIMEOUT = (3.05, 9.05)
 DELAY = 2000
 PAD = 5
 MAX_FAILS = 6
-OUTPUT = "C:/tmp/"
+OUTPUT = os.path.join(os.path.expanduser("~"), "tmp")
 LOGS = "./logs/"
 
 ALL_TIME = 0
