@@ -242,6 +242,14 @@ class MainWindow:
             slash_pos = self.base_url.find('/', stream_pos)
 
             self.model_name = self.base_url[stream_pos + 7: slash_pos]
+        elif input_url.startswith('https://live-edge'):
+            slash_pos = input_url[: -1].rfind('/')
+            self.base_url = input_url[: slash_pos + 1]
+
+            stream_pos = self.base_url.find('stream_')
+            slash_pos = self.base_url.find('/', stream_pos)
+
+            self.model_name = self.base_url[stream_pos + 7: slash_pos]
         elif input_url.startswith('http'):
             slash_pos = input_url[: -1].rfind('/')
             self.model_name = input_url[slash_pos + 1: -1] if input_url.endswith('/') else input_url[slash_pos + 1:]
@@ -315,13 +323,16 @@ class MainWindow:
     def get_image_url(self):
         edge_pos = self.base_url.find('-edge')
         point_pos = self.base_url.find('.', edge_pos)
+        # hyphen_pos = self.base_url.find('-', edge_pos + 1)
+        # if point_pos > hyphen_pos:
+        #     point_pos = hyphen_pos
         vsid = self.base_url[edge_pos + 5: point_pos]
         self.img_url = f"https://mobile-edge{vsid}.bcvcdn.com/stream_{self.model_name}.jpg"
 
     def get_model_info(self):
         post_fields = {
             'method': 'getRoomData',
-            'args[]': [self.model_name, False]
+            'args[]': [self.model_name, "", ""]
         }
 
         headers = {
@@ -330,7 +341,7 @@ class MainWindow:
         }
 
         try:
-            response = self.http_session.post("https://rt.chat-s-devushkami.com/tools/amf.php",
+            response = self.http_session.post("https://rt.chat-s-devushkami.com/tools/amf.php?x-country=a1",
                                               data=post_fields,
                                               headers=headers,
                                               proxies=self.proxies,
