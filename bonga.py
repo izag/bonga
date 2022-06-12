@@ -341,7 +341,7 @@ class MainWindow:
         }
 
         try:
-            response = self.http_session.post("https://rt.chat-s-devushkami.com/tools/amf.php?x-country=a1",
+            response = self.http_session.post("https://rf.chat-s-devushkami.com/tools/amf.php?x-country=a1",
                                               data=post_fields,
                                               headers=headers,
                                               proxies=self.proxies,
