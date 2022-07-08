@@ -136,6 +136,7 @@ class MainWindow:
         self.base_url = None
         self.model_image = None
         self.img_url = None
+        self.img_counter = 0
 
         self.hist_logger = logging.getLogger('history')
         self.hist_logger.setLevel(logging.INFO)
@@ -210,6 +211,7 @@ class MainWindow:
         self.cb_model.selection_range(0, END)
 
     def update_model_info(self, remember):
+        self.img_counter = 0
         if remember and (self.model_name is not None):
             if len(self.hist_stack) == 0 or (self.model_name != self.hist_stack[-1]):
                 self.hist_stack.append(self.model_name)
@@ -268,6 +270,10 @@ class MainWindow:
             self.cb_resolutions.set(info['performerData']['videoQuality'])
             self.base_url = f"https:{server_url}/hls/stream_{self.model_name}/public-aac/stream_{self.model_name}/"
 
+        if self.get_chunks() is None:
+            self.set_undefined_state()
+            return False
+
         if self.use_proxy.get() and len(proxy) != 0:
             self.add_to_proxies(proxy)
 
@@ -323,9 +329,6 @@ class MainWindow:
     def get_image_url(self):
         edge_pos = self.base_url.find('-edge')
         point_pos = self.base_url.find('.', edge_pos)
-        # hyphen_pos = self.base_url.find('-', edge_pos + 1)
-        # if point_pos > hyphen_pos:
-        #     point_pos = hyphen_pos
         vsid = self.base_url[edge_pos + 5: point_pos]
         self.img_url = f"https://mobile-edge{vsid}.bcvcdn.com/stream_{self.model_name}.jpg"
 
@@ -368,6 +371,9 @@ class MainWindow:
         global root
 
         try:
+            self.img_counter += 1
+            if (self.img_counter % 30 == 0) and (self.get_chunks() is None):
+                raise BaseException("Model is offline!")
             response = self.http_session.get(self.img_url, timeout=TIMEOUT)
             img = Image.open(io.BytesIO(response.content))
             w, h = img.size
@@ -489,6 +495,19 @@ class MainWindow:
 
         hist = sorted(self.proxy_dict.items(), key=lambda x: x[1], reverse=True)
         self.cb_proxy.configure(values=[x[0] for x in hist[:10]])
+
+    def get_chunks(self):
+        try:
+            chunks_url = urljoin(self.base_url, "chunks.m3u8")
+            r = self.http_session.get(chunks_url, timeout=TIMEOUT)
+            lines = r.text.splitlines()
+
+            if len(lines) < RecordSession.MIN_CHUNKS:
+                return None
+
+            return Chunks(lines)
+        except RequestException:
+            return None
 
 
 def load_hist_dict(period):
