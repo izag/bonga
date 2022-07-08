@@ -233,8 +233,6 @@ class MainWindow:
         else:
             self.proxies = None
 
-        ## https://live-edge66.bcvcdn.com/hls/stream_-icebabyice-/public/stream_-icebabyice-/chunks.m3u8
-        ## https://live-edge3.bcvcdn.com/hls/stream_TemariShi/public-aac/stream_TemariShi/chunks.m3u8
         self.base_url = None
         if input_url.startswith('https://ded'):
             public_pos = input_url.rfind('public')
@@ -261,7 +259,7 @@ class MainWindow:
         if self.base_url is None:
             info = self.get_model_info()
             print(info)
-            if 'localData' not in info:
+            if ('localData' not in info) or ('videoServerUrl' not in info['localData']):
                 self.set_undefined_state()
                 return False
 
@@ -361,19 +359,30 @@ class MainWindow:
         global executor
         global root
 
-        if (self.img_url is not None) or self.show_image:
-            executor.submit(self.fetch_image)
+        self.img_counter += 1
+        if (self.img_url is not None or self.img_counter % 30 == 0) and self.show_image and (self.model_name is not None):
+            executor.submit(self.fetch_image, self.img_counter)
 
         root.update_idletasks()
         root.after(DELAY, self.load_image)
 
-    def fetch_image(self):
+    def fetch_image(self, counter):
         global root
 
         try:
-            self.img_counter += 1
-            if (self.img_counter % 30 == 0) and (self.get_chunks() is None):
-                raise BaseException("Model is offline!")
+            if counter % 30 == 0:
+                info = self.get_model_info()
+                print(info)
+                if ('localData' not in info) or ('videoServerUrl' not in info['localData']):
+                    raise ValueError(f"Model {self.model_name} is offline.")
+
+                server_url = info['localData']['videoServerUrl']
+                self.model_name = info['performerData']['username']
+                self.cb_resolutions.set(info['performerData']['videoQuality'])
+                self.base_url = f"https:{server_url}/hls/stream_{self.model_name}/public-aac/stream_{self.model_name}/"
+                if self.get_chunks() is None:
+                    raise ValueError(f"Model {self.model_name} is offline!")
+                self.get_image_url()
             response = self.http_session.get(self.img_url, timeout=TIMEOUT)
             img = Image.open(io.BytesIO(response.content))
             w, h = img.size
@@ -381,10 +390,12 @@ class MainWindow:
             img_resized = img.resize((200, int(h * k)))
             root.after_idle(self.update_image, img_resized)
         except BaseException as error:
-            root.after_idle(self.set_undefined_state)
-            print("Exception URL: " + self.img_url)
+            print(f"Image URL: {self.img_url}")
             print(error)
             traceback.print_exc()
+            self.img_url = None
+            self.model_image = None
+            self.img_counter = 0
 
     def update_image(self, img):
         self.model_image = ImageTk.PhotoImage(img)
