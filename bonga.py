@@ -263,6 +263,10 @@ class MainWindow:
                 self.set_undefined_state()
                 return False
 
+            if info['performerData']['isAway']:
+                self.set_undefined_state()
+                return False
+
             server_url = info['localData']['videoServerUrl']
             self.model_name = info['performerData']['username']
             self.cb_resolutions.set(info['performerData']['videoQuality'])
@@ -375,6 +379,9 @@ class MainWindow:
                 print(info)
                 if ('localData' not in info) or ('videoServerUrl' not in info['localData']):
                     raise ValueError(f"Model {self.model_name} is offline.")
+
+                if info['performerData']['isAway']:
+                    raise ValueError(f"Model {self.model_name} is away.")
 
                 server_url = info['localData']['videoServerUrl']
                 self.model_name = info['performerData']['username']
