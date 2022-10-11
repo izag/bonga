@@ -78,40 +78,37 @@ class MainWindow:
         self.image_label = Label(root)
 
         self.level += 1
-        self.cb_model = ttk.Combobox(root, width=60)
+        self.cb_model = ttk.Combobox(root, width=30)
         self.cb_model.bind("<FocusIn>", self.focus_callback)
         self.cb_model.bind("<Button-1>", self.drop_down_callback)
         self.cb_model.bind('<Return>', self.enter_callback)
         self.cb_model.focus_set()
-        self.cb_model.grid(row=self.level, column=0, columnspan=4, sticky=W + E, padx=PAD, pady=PAD)
+        self.cb_model.grid(row=self.level, column=0, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
 
         self.btn_remove = Button(root, text="-", command=self.remove_from_favorites)
-        self.btn_remove.grid(row=self.level, column=4, sticky=W + E, padx=PAD, pady=PAD)
+        self.btn_remove.grid(row=self.level, column=3, sticky=W + E, padx=PAD, pady=PAD)
 
         self.level += 1
         self.btn_update = Button(root, text="Update info", command=lambda: self.update_model_info(True))
         self.btn_update.grid(row=self.level, column=0, sticky=W + E, padx=PAD, pady=PAD)
 
-        self.cb_resolutions = ttk.Combobox(root, state="readonly", values=[])
-        self.cb_resolutions.grid(row=self.level, column=1, columnspan=4, sticky=W + E, padx=PAD, pady=PAD)
-        self.cb_resolutions['values'] = ['1080', '720', '480', '240']
-
-        self.level += 1
-        self.btn_show_recording = Button(root,
-                                         text="Show recording model",
-                                         command=self.show_recording_model,
-                                         state=DISABLED)
-        self.btn_show_recording.grid(row=self.level, column=0, sticky=W + E, padx=PAD, pady=PAD)
+        self.cb_resolutions = ttk.Combobox(root, state=DISABLED, values=[])
+        # self.cb_resolutions.grid(row=self.level, column=1, columnspan=4, sticky=W + E, padx=PAD, pady=PAD)
+        # self.cb_resolutions['values'] = ['1080', '720', '480', '240']
+        #
+        # self.level += 1
+        self.btn_show_recording = Button(root, text="SRM", command=self.show_recording_model, state=DISABLED)
+        self.btn_show_recording.grid(row=self.level, column=1, sticky=W + E, padx=PAD, pady=PAD)
 
         self.use_proxy = BooleanVar()
         self.use_proxy.set(False)
         self.use_proxy.trace('w', self.on_use_proxy_change)
 
-        self.chk_use_proxy = Checkbutton(root, text='Use proxy', variable=self.use_proxy)
-        self.chk_use_proxy.grid(row=self.level, column=1, sticky=W, padx=PAD, pady=PAD)
+        self.chk_use_proxy = Checkbutton(root, text='Use proxy', variable=self.use_proxy, state=DISABLED)
+        # self.chk_use_proxy.grid(row=self.level, column=1, sticky=W, padx=PAD, pady=PAD)
 
         self.cb_proxy = ttk.Combobox(root, width=30, state=DISABLED)
-        self.cb_proxy.grid(row=self.level, column=2, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
+        # self.cb_proxy.grid(row=self.level, column=2, columnspan=3, sticky=W + E, padx=PAD, pady=PAD)
 
         self.level += 1
         self.btn_start = Button(root, text="Start", command=self.on_btn_start)
@@ -152,8 +149,8 @@ class MainWindow:
         self.fh_proxy.setLevel(logging.INFO)
         self.proxy_logger.addHandler(self.fh_proxy)
 
-        self.proxy_dict = {}
-        self.load_proxy_dict()
+        # self.proxy_dict = {}
+        # self.load_proxy_dict()
 
         self.hist_stack = []
 
@@ -164,21 +161,22 @@ class MainWindow:
 
         self.stop()
 
-        idx = self.cb_resolutions.current()
+        # idx = self.cb_resolutions.current()
 
         success = self.update_model_info(True)
         if not success:
             self.set_default_state()
             return
 
-        items_count = len(self.cb_resolutions['value'])
-        if items_count == 0:
-            return
+        # items_count = len(self.cb_resolutions['value'])
+        # if items_count == 0:
+        #     self.set_default_state()
+        #     return
+        #
+        # if items_count <= idx or idx < 0:
+        #     idx = 0
 
-        if items_count <= idx or idx < 0:
-            idx = 0
-
-        self.cb_resolutions.current(idx)
+        # self.cb_resolutions.current(idx)
 
         self.session = RecordSession(self, self.base_url, self.model_name, "chunks.m3u8")
         self.session.start()
