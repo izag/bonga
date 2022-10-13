@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import traceback
+from collections import deque
 from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Thread
 from tkinter import Tk, Button, ttk, W, E, Image, Label, Menu, DISABLED, NORMAL, END, HORIZONTAL, \
@@ -686,6 +687,8 @@ class RecordSession(Thread):
         self.name = 'RecordSession'
         self.stopped = False
         self.daemon = True
+        self.file_num = 1
+        self.file_deq = deque(maxlen=4)
 
         self.logger = logging.getLogger('bonga_application')
         self.logger.setLevel(logging.DEBUG)
@@ -710,14 +713,14 @@ class RecordSession(Thread):
             self.logger.exception(error)
             return None
 
-    def save_to_file(self, filename):
-        self.logger.debug(filename)
-        file_path = os.path.join(self.output_dir, filename)
-        if os.path.exists(file_path):
-            self.logger.debug("Skipped: " + filename)
-            return
+    def save_to_file(self, remote_filename, local_filename):
+        self.logger.debug(remote_filename)
+        file_path = os.path.join(self.output_dir, local_filename)
+        # if os.path.exists(file_path):
+        #     self.logger.debug("Skipped: " + remote_filename)
+        #     return
 
-        ts_url = urljoin(self.base_url, filename)
+        ts_url = urljoin(self.base_url, remote_filename)
         try:
             session = POOL.get()
             with session.get(ts_url, stream=True, timeout=TIMEOUT) as r, open(file_path, 'wb') as fd:
@@ -749,7 +752,7 @@ class RecordSession(Thread):
                 fails = 0
 
             if last_pos >= chunks.cur_pos:
-                time.sleep(0.5)
+                time.sleep(1)
                 continue
 
             last_pos = chunks.cur_pos
@@ -757,11 +760,17 @@ class RecordSession(Thread):
 
             try:
                 for ts in chunks.ts:
-                    executor.submit(self.save_to_file, ts)
+                    if ts in self.file_deq:
+                        self.logger.debug("Skipped: " + ts)
+                        continue
+
+                    self.file_deq.append(ts)
+                    executor.submit(self.save_to_file, ts, f'{self.file_num:020}.ts')
+                    self.file_num += 1
             except BaseException as e:
                 self.logger.exception(e)
 
-            time.sleep(0.5)
+            time.sleep(1)
 
         try:
             root.after_idle(self.main_win.set_default_state)
