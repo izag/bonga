@@ -9,6 +9,7 @@ from threading import Thread
 from tkinter import Tk, Button, ttk, W, E, Image, Label, Menu, DISABLED, NORMAL, END, HORIZONTAL, \
     Checkbutton, BooleanVar, BOTH, Toplevel, Frame, Listbox, LEFT, Scrollbar, RIGHT, SINGLE, VERTICAL, Y, StringVar, \
     Entry
+from urllib.parse import urlparse
 
 import clipboard
 import requests
@@ -79,7 +80,7 @@ class MainWindow:
         self.image_label = Label(root)
 
         self.level += 1
-        self.cb_model = ttk.Combobox(root, width=30)
+        self.cb_model = ttk.Combobox(root, width=30, justify=RIGHT)
         self.cb_model.bind("<FocusIn>", self.focus_callback)
         self.cb_model.bind("<Button-1>", self.drop_down_callback)
         self.cb_model.bind('<Return>', self.enter_callback)
@@ -93,11 +94,6 @@ class MainWindow:
         self.btn_update = Button(root, text="Update info", command=lambda: self.update_model_info(True))
         self.btn_update.grid(row=self.level, column=0, sticky=W + E, padx=PAD, pady=PAD)
 
-        self.cb_resolutions = ttk.Combobox(root, state=DISABLED, values=[])
-        # self.cb_resolutions.grid(row=self.level, column=1, columnspan=4, sticky=W + E, padx=PAD, pady=PAD)
-        # self.cb_resolutions['values'] = ['1080', '720', '480', '240']
-        #
-        # self.level += 1
         self.btn_show_recording = Button(root, text="SRM", command=self.show_recording_model, state=DISABLED)
         self.btn_show_recording.grid(row=self.level, column=1, sticky=W + E, padx=PAD, pady=PAD)
 
@@ -162,22 +158,10 @@ class MainWindow:
 
         self.stop()
 
-        # idx = self.cb_resolutions.current()
-
         success = self.update_model_info(True)
         if not success:
             self.set_default_state()
             return
-
-        # items_count = len(self.cb_resolutions['value'])
-        # if items_count == 0:
-        #     self.set_default_state()
-        #     return
-        #
-        # if items_count <= idx or idx < 0:
-        #     idx = 0
-
-        # self.cb_resolutions.current(idx)
 
         self.session = RecordSession(self, self.base_url, self.model_name, "chunks.m3u8")
         self.session.start()
@@ -237,23 +221,20 @@ class MainWindow:
             public_pos = input_url.rfind('public')
             self.base_url = input_url[: public_pos + 7]
 
-            stream_pos = self.base_url.find('stream_')
-            slash_pos = self.base_url.find('/', stream_pos)
-
-            self.model_name = self.base_url[stream_pos + 7: slash_pos]
+            self.model_name = self.extract_model_name(self.base_url)
         elif input_url.startswith('https://live-edge'):
             slash_pos = input_url[: -1].rfind('/')
             self.base_url = input_url[: slash_pos + 1]
 
-            stream_pos = self.base_url.find('stream_')
-            slash_pos = self.base_url.find('/', stream_pos)
-
-            self.model_name = self.base_url[stream_pos + 7: slash_pos]
+            self.model_name = self.extract_model_name(self.base_url)
         elif input_url.startswith('http'):
             slash_pos = input_url[: -1].rfind('/')
             self.model_name = input_url[slash_pos + 1: -1] if input_url.endswith('/') else input_url[slash_pos + 1:]
         else:
             self.model_name = input_url
+
+        if self.base_url is None:
+            self.base_url = self.get_model_baseurl()
 
         if self.base_url is None:
             info = self.get_model_info()
@@ -268,7 +249,6 @@ class MainWindow:
 
             server_url = info['localData']['videoServerUrl']
             self.model_name = info['performerData']['username']
-            self.cb_resolutions.set(info['performerData']['videoQuality'])
             self.base_url = f"https:{server_url}/hls/stream_{self.model_name}/public-aac/stream_{self.model_name}/"
 
         if self.get_chunks() is None:
@@ -327,10 +307,21 @@ class MainWindow:
     def enter_callback(self, event):
         self.update_model_info(True)
 
+    def extract_model_name(self, url):
+        if url is None:
+            return None
+
+        stream_pos = url.find('stream_')
+        slash_pos = url.find('/', stream_pos)
+
+        return url[stream_pos + 7: slash_pos]
+
     def get_image_url(self):
         edge_pos = self.base_url.find('-edge')
         point_pos = self.base_url.find('.', edge_pos)
         vsid = self.base_url[edge_pos + 5: point_pos]
+        if vsid[-3:] == '-rn':
+            vsid = vsid[:-3]
         self.img_url = f"https://mobile-edge{vsid}.bcvcdn.com/stream_{self.model_name}.jpg"
 
     def get_model_info(self):
@@ -358,6 +349,34 @@ class MainWindow:
 
         return response.json()
 
+    def get_model_baseurl(self):
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Host': 'sex-videochat.club',
+            'Origin': 'https://sex-videochat.club',
+            'Referer': f'https://sex-videochat.club/chat/{self.model_name}/'
+        }
+
+        try:
+            response = self.http_session.post(f"https://sex-videochat.club/bonga/model-data/{self.model_name}/",
+                                              headers=headers,
+                                              proxies=self.proxies,
+                                              timeout=TIMEOUT)
+        except RequestException as error:
+            print("GetRoomData exception model: " + self.model_name)
+            print(error)
+            traceback.print_exc()
+            return None
+
+        playlist_url = response.text
+        domain = urlparse(playlist_url).netloc
+        if len(domain) < 1:
+            print(f'Playlist : {playlist_url}')
+            return None
+
+        self.model_name = self.extract_model_name(playlist_url)
+        return f"https://{domain}/hls/stream_{self.model_name}/public-aac/stream_{self.model_name}/"
+
     def load_image(self):
         global executor
         global root
@@ -374,18 +393,20 @@ class MainWindow:
 
         try:
             if counter % 30 == 0:
-                info = self.get_model_info()
-                print(info)
-                if ('localData' not in info) or ('videoServerUrl' not in info['localData']):
-                    raise ValueError(f"Model {self.model_name} is offline.")
+                self.base_url = self.get_model_baseurl()
 
-                if info['performerData']['isAway']:
-                    raise ValueError(f"Model {self.model_name} is away.")
+                if self.base_url is None:
+                    info = self.get_model_info()
+                    print(info)
+                    if ('localData' not in info) or ('videoServerUrl' not in info['localData']):
+                        raise ValueError(f"Model {self.model_name} is offline.")
 
-                server_url = info['localData']['videoServerUrl']
-                self.model_name = info['performerData']['username']
-                self.cb_resolutions.set(info['performerData']['videoQuality'])
-                self.base_url = f"https:{server_url}/hls/stream_{self.model_name}/public-aac/stream_{self.model_name}/"
+                    if info['performerData']['isAway']:
+                        raise ValueError(f"Model {self.model_name} is away.")
+
+                    server_url = info['localData']['videoServerUrl']
+                    self.model_name = info['performerData']['username']
+                    self.base_url = f"https:{server_url}/hls/stream_{self.model_name}/public-aac/stream_{self.model_name}/"
                 if self.get_chunks() is None:
                     raise ValueError(f"Model {self.model_name} is offline!")
                 self.get_image_url()
