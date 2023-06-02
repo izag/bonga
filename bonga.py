@@ -383,16 +383,16 @@ class MainWindow:
 
         self.img_counter += 1
         if (self.img_url is not None or self.img_counter % 30 == 0) and self.show_image and (self.model_name is not None):
-            executor.submit(self.fetch_image, self.img_counter)
+            executor.submit(self.fetch_image)
 
         root.update_idletasks()
         root.after(DELAY, self.load_image)
 
-    def fetch_image(self, counter):
+    def fetch_image(self):
         global root
 
         try:
-            if counter % 30 == 0:
+            if self.img_counter % 30 == 0:
                 self.base_url = self.get_model_baseurl()
 
                 if self.base_url is None:
@@ -410,11 +410,12 @@ class MainWindow:
                 if self.get_chunks() is None:
                     raise ValueError(f"Model {self.model_name} is offline!")
                 self.get_image_url()
+
             response = self.http_session.get(self.img_url, timeout=TIMEOUT)
             img = Image.open(io.BytesIO(response.content))
             w, h = img.size
             k = 200 / w
-            img_resized = img.resize((200, int(h * k)))
+            img_resized = img.resize((200, int(h * k)), resample=Image.Resampling.NEAREST, reducing_gap=1.0)
             root.after_idle(self.update_image, img_resized)
         except BaseException as error:
             print(f"Image URL: {self.img_url}")
@@ -737,14 +738,14 @@ class RecordSession(Thread):
     def save_to_file(self, remote_filename, local_filename):
         self.logger.debug(remote_filename)
         file_path = os.path.join(self.output_dir, local_filename)
-        # if os.path.exists(file_path):
-        #     self.logger.debug("Skipped: " + remote_filename)
-        #     return
 
         ts_url = urljoin(self.base_url, remote_filename)
         try:
             session = POOL.get()
             with session.get(ts_url, stream=True, timeout=TIMEOUT) as r, open(file_path, 'wb') as fd:
+                if r.status_code != 200:
+                    self.logger.debug(f"Status {r.status_code}: {remote_filename}")
+                    return
                 for chunk in r.iter_content(chunk_size=65536):
                     fd.write(chunk)
         except BaseException as error:
