@@ -65,6 +65,8 @@ class MainWindow:
         hist_menu.add_command(label="Three months", command=lambda: self.show_full_history(THREE_MONTHS))
         self.menu_bar.add_cascade(label="History", menu=hist_menu)
 
+        self.menu_bar.add_command(label="Link", command=self.copy_model_link)
+
         root.config(menu=self.menu_bar)
 
         self.session = None
@@ -192,6 +194,9 @@ class MainWindow:
     def paste_model_name(self):
         self.cb_model.set(clipboard.paste())
         self.cb_model.selection_range(0, END)
+
+    def copy_model_link(self):
+        clipboard.copy(urljoin(self.base_url, 'playlist.m3u8'))
 
     def update_model_info(self, remember):
         self.img_counter = 0
