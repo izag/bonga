@@ -1,6 +1,8 @@
 import io
 import logging
 import os
+import socket
+import sys
 import time
 import traceback
 from collections import deque
@@ -38,6 +40,9 @@ TWO_DAYS = 2 * DAY
 WEEK = 7 * DAY
 MONTH = 30 * DAY
 THREE_MONTHS = 3 * MONTH
+
+PLAYER_HOST = 'localhost'
+PLAYER_PORT = 8686
 
 executor = ThreadPoolExecutor(max_workers=20)
 
@@ -98,6 +103,9 @@ class MainWindow:
 
         self.btn_show_recording = Button(root, text="SRM", command=self.show_recording_model, state=DISABLED)
         self.btn_show_recording.grid(row=self.level, column=1, sticky=W + E, padx=PAD, pady=PAD)
+
+        self.btn_play = Button(root, text="Play", command=self.play_record)
+        self.btn_play.grid(row=self.level, column=2, sticky=W + E, padx=PAD, pady=PAD)
 
         self.use_proxy = BooleanVar()
         self.use_proxy.set(False)
@@ -197,6 +205,13 @@ class MainWindow:
 
     def copy_model_link(self):
         clipboard.copy(urljoin(self.base_url, 'playlist.m3u8'))
+
+    def play_record(self):
+        if self.session is None:
+            return
+
+        clipboard.copy(self.session.output_dir)
+        executor.submit(send_to_player, self.session.output_dir)
 
     def update_model_info(self, remember):
         self.img_counter = 0
@@ -581,6 +596,12 @@ def load_hist_dict(period):
     return res
 
 
+def send_to_player(path):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.connect((PLAYER_HOST, PLAYER_PORT))
+        sock.sendall(bytes(path + "\n", 'ascii'))
+
+
 class HistoryWindow:
 
     def __init__(self, parent, win, hist_dict):
@@ -816,7 +837,18 @@ class RecordSession(Thread):
 if __name__ == "__main__":
     if not os.path.exists(LOGS):
         os.mkdir(LOGS)
+    if not os.path.exists(OUTPUT):
+        os.mkdir(OUTPUT)
+
+
+    my_gui = MainWindow()
+    if len(sys.argv) > 4:
+        w = sys.argv[1]
+        h = sys.argv[2]
+        x = sys.argv[3]
+        y = sys.argv[4]
+        root.geometry(f'+{x}+{y}')
 
     root.resizable(False, False)
-    my_gui = MainWindow()
+
     root.mainloop()
