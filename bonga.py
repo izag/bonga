@@ -528,7 +528,14 @@ class MainWindow:
         if self.hist_window is not None:
             self.hist_window.on_close()
 
-        self.hist_window = HistoryWindow(self, Toplevel(root), load_hist_dict(period))
+        self.menu_bar.entryconfig("History", state=DISABLED)
+        hist_future = executor.submit(load_hist_dict, period)
+        hist_future.add_done_callback(lambda f: root.after_idle(self.show_hist_window, f))
+
+    def show_hist_window(self, future):
+        history = future.result()
+        self.hist_window = HistoryWindow(self, Toplevel(root), history)
+        self.menu_bar.entryconfig("History", state=NORMAL)
 
     def back_in_history(self):
         if len(self.hist_stack) == 0:
