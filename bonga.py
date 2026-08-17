@@ -31,7 +31,7 @@ TIMEOUT = (3.05, 9.05)
 DELAY = 2000
 PAD = 5
 MAX_FAILS = 6
-OUTPUT = os.path.join(os.path.expanduser("~"), "tmp")
+OUTPUT = os.path.join(os.path.expanduser("~"), "tmp1")
 LOGS = "./logs/"
 
 ALL_TIME = 0
@@ -356,7 +356,7 @@ class MainWindow:
         }
 
         try:
-            response = self.http_session.post("https://rf.chat-s-devushkami.com/tools/amf.php?x-country=a1",
+            response = self.http_session.post("https://rus.chat-s-devushkami.com/tools/amf.php?x-country=a1",
                                               data=post_fields,
                                               headers=headers,
                                               proxies=self.proxies,
@@ -372,13 +372,13 @@ class MainWindow:
     def get_model_baseurl(self):
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Host': 'sex-videochat.club',
-            'Origin': 'https://sex-videochat.club',
-            'Referer': f'https://sex-videochat.club/chat/{self.model_name}/'
+            'Host': 'ru.sex-videochat.me',
+            'Origin': 'https://ru.sex-videochat.me',
+            'Referer': f'https://ru.sex-videochat.me/chat/{self.model_name}/'
         }
 
         try:
-            response = self.http_session.post(f"https://sex-videochat.club/bonga/model-data/{self.model_name}/",
+            response = self.http_session.post(f"https://ru.sex-videochat.me/bonga/model-data/{self.model_name}/",
                                               headers=headers,
                                               proxies=self.proxies,
                                               timeout=TIMEOUT)
