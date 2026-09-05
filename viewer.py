@@ -18,11 +18,11 @@ import requests
 from queue import Queue
 from PIL import Image, ImageTk
 from urllib3 import Retry
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.firefox.options import Options
+# from selenium import webdriver
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.firefox.options import Options
 from threading import Event
-from tbselenium.tbdriver import TorBrowserDriver
+# from tbselenium.tbdriver import TorBrowserDriver
 
 
 random.seed()
@@ -31,7 +31,7 @@ PAD = 0
 TIMEOUT = (3.05, 9.05)
 IMG_WIDTH = 180
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0'
-REFERER = 'https://rf.chat-s-devushkami.com/'
+REFERER = 'https://en.chat-s-devushkami.com/'
 ROWS = 24
 COLS = 4
 
@@ -66,7 +66,7 @@ STREAM_HEADERS = {
 
 REST_HEADERS = {
     'User-Agent': USER_AGENT,
-    'Host': 'rf.chat-s-devushkami.com',
+    'Host': 'en.chat-s-devushkami.com',
     'Accept': '*/*',
     'Accept-Language': 'ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3',
     'Accept-Encoding': 'gzip, deflate, br, zstd',
@@ -202,7 +202,7 @@ class MainWindow:
 
     def show_page(self, gender, page):
         result = get_all(gender, page)
-        models = [(model['username'], 'https:' + model['thumb_image'].replace('{ext}', 'webp'), model['vsid']) for model in result['models']]
+        models = [(model['username'], model['thumb_image'].replace('{ext}', 'webp'), model['vsid']) for model in result['models']]
         self.reconfigure_buttons(models)
 
     def load_more_like(self):
@@ -464,7 +464,7 @@ class MainWindow:
 
 
 def get_all(gender, page):
-    url = f'https://rf.chat-s-devushkami.com/tools/listing_v3.php?livetab=female&offset={page * ROWS * COLS}&limit={ROWS * COLS}'
+    url = f'https://en.chat-s-devushkami.com/tools/listing_v3.php?livetab=female&offset={page * ROWS * COLS}&limit={ROWS * COLS}'
 
     # if gender is not None:
     #     src += f'&genders={gender}'

@@ -31,7 +31,7 @@ TIMEOUT = (3.05, 9.05)
 DELAY = 2000
 PAD = 5
 MAX_FAILS = 6
-OUTPUT = os.path.join(os.path.expanduser("~"), "tmp1")
+OUTPUT = os.path.join(os.path.expanduser("~"), "tmp2")
 LOGS = "./logs/"
 
 ALL_TIME = 0
@@ -253,8 +253,8 @@ class MainWindow:
         else:
             self.model_name = input_url
 
-        if self.base_url is None:
-            self.base_url = self.get_model_baseurl()
+        # if self.base_url is None:
+        #     self.base_url = self.get_model_baseurl()
 
         if self.base_url is None:
             info = self.get_model_info()
@@ -356,7 +356,7 @@ class MainWindow:
         }
 
         try:
-            response = self.http_session.post("https://rus.chat-s-devushkami.com/tools/amf.php?x-country=a1",
+            response = self.http_session.post("https://en.chat-s-devushkami.com/tools/amf.php?x-country=a1",
                                               data=post_fields,
                                               headers=headers,
                                               proxies=self.proxies,
@@ -372,13 +372,13 @@ class MainWindow:
     def get_model_baseurl(self):
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Host': 'ru.sex-videochat.me',
-            'Origin': 'https://ru.sex-videochat.me',
-            'Referer': f'https://ru.sex-videochat.me/chat/{self.model_name}/'
+            'Host': 'erovideochat.su',
+            'Origin': 'https://erovideochat.su',
+            'Referer': f'https://erovideochat.su/chat/{self.model_name}/'
         }
 
         try:
-            response = self.http_session.post(f"https://ru.sex-videochat.me/bonga/model-data/{self.model_name}/",
+            response = self.http_session.post(f"http://erovideochat.su/bonga/model-data/{self.model_name}/",
                                               headers=headers,
                                               proxies=self.proxies,
                                               timeout=TIMEOUT)
@@ -413,7 +413,8 @@ class MainWindow:
 
         try:
             if self.img_counter % 30 == 0:
-                self.base_url = self.get_model_baseurl()
+                # self.base_url = self.get_model_baseurl()
+                self.base_url = None
 
                 if self.base_url is None:
                     info = self.get_model_info()
